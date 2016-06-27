@@ -50,29 +50,17 @@ GLfloat N[] = { 0, 0, 0 };
 GLfloat V[] = { 0, 1, 0 };
 
 // Camera rotate
+float theta = 0.0f, phi = 0.0f;
 
-// angle of rotation for the camera direction
-float angle = 0.0f;
-
-// actual vector representing the camera's direction
-float lx = 0.0f, lz = -1.0f;
-
-// XZ position of the camera
-float x = 0.0f, z = 5.0f;
-
-// the key states. These variables will be zero
-//when no key is being presses
-float deltaAngle = 0.0f;
-float deltaMove = 0;
 int xOrigin = -1;
+int yOrigin = 0;
+
+char filename[100];
 
 void loadFile(char *name)
 {
 	FILE * fp = fopen(name, "r");
 	fscanf(fp, "%d %d", &verticesQuantity, &trianglesQuantity);
-
-	//verticesQuantity -= 1;
-	//trianglesQuantity += 1;
 
 	verticesQuantity *= 3;
 	trianglesQuantity *= 3;
@@ -94,7 +82,7 @@ void loadFile(char *name)
 		
 		vertices[j] = x;
 		vertices[j + 1] = -y;
-		vertices[j + 2] = z;
+		vertices[j + 2] = -z;
 
 		j += 3;
 	}
@@ -216,6 +204,7 @@ void loadData()
 	fscanf(fp, "%f %f %f %f", &specular[0], &specular[1], &specular[2], &specular[3]);
 	fscanf(fp, "%f %f %f %f", &emission[0], &emission[1], &emission[2], &emission[3]);
 	fscanf(fp, "%d", &n);
+	fscanf(fp, "%s", filename);
 
 	fclose(fp);
 }
@@ -229,12 +218,16 @@ void init(void)
 	glEnable(GL_LIGHTING);
 	glEnable(GL_COLOR_MATERIAL);
 
-	glColorMaterial(GL_FRONT, GL_AMBIENT_AND_DIFFUSE);
+	glColorMaterial(GL_FRONT_AND_BACK, GL_DIFFUSE);
 	
 	loadData();
 	initLights();
 
-	loadFile("../objects/calice2.byu");
+	char str[100] = "";
+	strcat(str, "../objects/");
+	strcat(str, filename);
+	strcat(str, ".byu");
+	loadFile(str);
 }
 
 void draw()
@@ -260,17 +253,13 @@ void draw()
 	glDisableClientState(GL_NORMAL_ARRAY);
 }
 
-void computePos(float deltaMove) {
-	x += deltaMove * lx * 0.1f;
-	z += deltaMove * lz * 0.1f;
-}
-
 void display(void)
 {
-	if (deltaMove)
-		computePos(deltaMove);
+	if (xOrigin > 0) {
+		float eyeX = C[1] + 100 * cos(phi) * sin(theta);
 
-	gluLookAt(N[0] + x, N[1], N[2] + z, C[0] + x + lx, C[1], C[2] + z + lz, V[0], V[1], V[2]);
+		gluLookAt(N[0] + eyeX, N[1], N[2], C[0], C[1], C[2], V[0], V[1], V[2]);
+	}
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -297,9 +286,9 @@ void reshape(int w, int h)
 
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
-	gluPerspective(FOV, AspectRatio, Near, Far); // FOV, AspectRatio, NearClip, FarClip
+	gluPerspective(FOV, AspectRatio, Near, Far);
 
-	gluLookAt(N[0] + x, N[1], N[2] + z, C[0] + x + lx, C[1], C[2] + z + lz, V[0], V[1], V[2]);
+	gluLookAt(N[0], N[1], N[2], C[0], C[1], C[2], V[0], V[1], V[2]);
 
 	glMatrixMode(GL_MODELVIEW);
 }
@@ -308,22 +297,29 @@ void mouse(int button, int state, int x, int y)
 {
 	if (button == GLUT_LEFT_BUTTON) {
 		if (state == GLUT_UP) {
-			angle += deltaAngle;
 			xOrigin = -1;
+			yOrigin = 0;
+
+			theta = 0;
+			phi = 0;
 		} else {
 			xOrigin = x;
+			yOrigin = y;
 		}
 	}
 }
 
 void mouseMove(int button, int state, int x, int y)
 {
-	if (xOrigin >= 0) {
-		deltaAngle = (x - xOrigin) * 0.01f;
-
-		lx = sin(angle + deltaAngle);
-		lz = -cos(angle + deltaAngle);
+	if (xOrigin > 0) {
+		theta += (x - xOrigin) * 0.01f;
+		phi += (y - yOrigin) * 0.01f;
 	}
+
+	xOrigin = x;
+	yOrigin = y;
+
+	glutPostRedisplay();
 }
 
 void keyboard(unsigned char key, int x, int y)
@@ -337,27 +333,29 @@ void keyboard(unsigned char key, int x, int y)
 	} else if (key == 's') {
 		cameraZ -= 10.0f;
 	} else if (key == 'r') {
+		free(vertices);
+		free(indices);
+		free(normals);
+		free(faces);
+
 		loadData();
 		initLights();
 		reshape(width, height);
+
+		char str[100] = "";
+		strcat(str, "../objects/");
+		strcat(str, filename);
+		strcat(str, ".byu");
+		loadFile(str);
+	} else {
+		free(vertices);
+		free(indices);
+		free(normals);
+		free(faces);
+		exit(0);
 	}
 
-	display();
-}
-
-
-void pressKey(int key, int xx, int yy) {
-	switch (key) {
-		case GLUT_KEY_UP: deltaMove = 0.5f; break;
-		case GLUT_KEY_DOWN: deltaMove = -0.5f; break;
-	}
-}
-
-void releaseKey(int key, int x, int y) {
-	switch (key) {
-		case GLUT_KEY_UP:
-		case GLUT_KEY_DOWN: deltaMove = 0; break;
-	}
+	glutPostRedisplay();
 }
 
 int main(int argc, char** argv)
@@ -373,8 +371,6 @@ int main(int argc, char** argv)
 	glutMouseFunc(mouse);
 	glutMotionFunc(mouseMove);
 	glutKeyboardFunc(keyboard);
-	glutSpecialFunc(pressKey);
-	glutSpecialUpFunc(releaseKey);
 	glutMainLoop();
 	return 0;
 }
